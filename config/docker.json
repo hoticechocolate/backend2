@@ -1,0 +1,6 @@
+{
+  "database": {"uri": "mongodb://mongo:27017", "name": "polarice"},
+  "storage": {"base_url": "https://kinjeyanbgxxeinswbpm.supabase.co/storage/v1/object/public/sic-images"},
+  "web": {"host": "0.0.0.0", "port": 8000, "allowed_origins": ["http://localhost:8443", "http://127.0.0.1:8443"]},
+  "admin": {"host": "0.0.0.0", "port": 8001, "token_env": "POLARICE_ADMIN_TOKEN"}
+}

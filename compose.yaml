@@ -1,0 +1,92 @@
+name: polarice
+
+x-backend: &backend
+  image: polarice-backend:1.0
+  build: .
+  environment: &backend-env
+    POLARICE_CONFIG: /app/config/docker.json
+    POLARICE_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:?Set database username}:${MONGO_ROOT_PASSWORD:?Set database password}@mongo:27017/?authSource=admin
+  networks: [internal]
+
+services:
+  mongo:
+    image: mongo:8.0.17
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set database username}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set database password}
+    volumes:
+      - mongo-data:/data/db
+    networks: [internal]
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  import-data:
+    <<: *backend
+    command: [python, manage.py, import-data]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure:3
+
+  web:
+    <<: *backend
+    restart: unless-stopped
+    depends_on:
+      import-data:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  admin:
+    <<: *backend
+    command: [python, manage.py, admin]
+    environment:
+      <<: *backend-env
+      POLARICE_ADMIN_TOKEN: ${POLARICE_ADMIN_TOKEN:?Set administrator token}
+    restart: unless-stopped
+    depends_on:
+      import-data:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8001/health',headers={'Authorization':'Bearer '+os.environ['POLARICE_ADMIN_TOKEN']}); urllib.request.urlopen(r,timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    image: polarice-frontend:1.0
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      - "${POLARICE_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [internal]
+    depends_on:
+      web:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+
+  test:
+    <<: *backend
+    profiles: [test]
+    command: [python, -m, pytest, -q, -p, no:cacheprovider]
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+
+networks:
+  internal:

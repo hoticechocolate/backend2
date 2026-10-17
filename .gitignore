@@ -1,0 +1,7 @@
+.runtime/
+__pycache__/
+.pytest_cache/
+config/local.json
+.venv/
+test-report.json
+.env

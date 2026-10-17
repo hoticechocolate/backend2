@@ -1,0 +1,9 @@
+.runtime
+.venv
+.env
+__pycache__
+**/__pycache__
+.pytest_cache
+config/local.json
+test-report.json
+.git
